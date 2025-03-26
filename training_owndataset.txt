@@ -1,0 +1,112 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+
+#  Loading nd prepare the dataset
+print("Loading dataset...")
+df = pd.read_csv('dataset.csv')
+
+# Splitinng into features (X) nd target (y)
+X = df[['d_RD', 'd_SD']].values
+y = df['C_phi'].values
+
+# Split into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Standardize the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+#  Building the neural network model
+def build_model(input_shape):
+    model = Sequential([
+        Dense(128, activation='relu', input_shape=input_shape),
+        Dropout(0.2),
+        Dense(64, activation='relu'),
+        Dropout(0.2),
+        Dense(32, activation='relu'),
+        Dense(1)  # Output layer for regression
+    ])
+
+    optimizer = Adam(learning_rate=0.001)
+    model.compile(optimizer=optimizer,
+                 loss='mse',
+                 metrics=['mae'])
+    return model
+
+print("\nBuilding model...")
+model = build_model((X_train_scaled.shape[1],))
+model.summary()
+
+#  Training the model
+print("\nTraining model...")
+history = model.fit(X_train_scaled, y_train,
+                    epochs=100,
+                    batch_size=32,
+                    validation_split=0.2,
+                    verbose=1)
+
+# Evaluate on test set
+test_loss, test_mae = model.evaluate(X_test_scaled, y_test, verbose=0)
+print(f"\nTest MAE: {test_mae:.4f}")
+
+# Visualization of results
+def plot_history(history):
+    plt.figure(figsize=(12, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['mae'], label='Train MAE')
+    plt.plot(history.history['val_mae'], label='Validation MAE')
+    plt.title('Model MAE')
+    plt.ylabel('MAE')
+    plt.xlabel('Epoch')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history['loss'], label='Train Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+print("\nPlotting training history...")
+plot_history(history)
+
+# Make predictions
+y_pred = model.predict(X_test_scaled)
+
+# Plot predictions vs true values
+plt.figure(figsize=(8, 6))
+plt.scatter(y_test, y_pred, alpha=0.3)
+plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], 'r--')
+plt.xlabel('True Values')
+plt.ylabel('Predictions')
+plt.title('True vs Predicted Achievable Rates')
+plt.show()
+
+#  Prediction function
+def predict_achievable_rate(d_RD, d_SD):
+    input_data = np.array([[d_RD, d_SD]])
+    input_scaled = scaler.transform(input_data)
+    prediction = model.predict(input_scaled)[0][0]
+    return prediction
+
+# Example 
+print("\nExample prediction:")
+d_RD_example = 30.0
+d_SD_example = 35.0
+predicted_rate = predict_achievable_rate(d_RD_example, d_SD_example)
+print(f"Predicted achievable rate for d_RD={d_RD_example}m, d_SD={d_SD_example}m: {predicted_rate:.2f} bps/Hz")
+
+print("\nAll operations completed!")
